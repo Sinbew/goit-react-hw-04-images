@@ -1,5 +1,5 @@
 import styles from './ImageGallery.module.css';
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import { requestImage } from '../../api/api';
 import { Button } from 'components/Button/Button';
 import { Loader } from 'components/Loader/Loader';
@@ -7,84 +7,76 @@ import { ImageGalleryItem } from './ImageGalleryItem/ImageGalleryItem';
 import { toast } from 'react-toastify';
 import PropTypes from 'prop-types';
 
-export class ImageGallery extends Component {
-  static propTypes = {
-    handlerOpenModal: PropTypes.func.isRequired,
-    search: PropTypes.string.isRequired,
-  };
+export const ImageGallery = ({ search, handlerOpenModal }) => {
+  const [imageList, setImageList] = useState([]);
+  const [totalHits, setTotalHits] = useState(null);
+  const [page, setPage] = useState(1);
+  const [loader, setLoader] = useState(false);
 
-  state = {
-    imageList: [],
-    totalHits: null,
-    page: 1,
-    loader: false,
-  };
-
-  componentDidUpdate(prevProps, prevState) {
-    if (prevProps.search !== this.props.search) {
-      this.setState({ loader: true });
-      requestImage(this.props.search)
-        .then(response => {
-          const { data } = response;
-          if (data.hits.length === 0) {
-            toast.error('Image not found');
-            return;
-          }
-          this.setState(prevState => ({
-            imageList: [...data.hits],
-            page: 2,
-            totalHits: data.totalHits,
-          }));
-        })
-        .finally(() => this.setState({ loader: false }));
+  useEffect(() => {
+    if (search === '') {
+      return;
     }
-  }
+    setLoader(true);
+    requestImage(search)
+      .then(response => {
+        const { data } = response;
+        if (data.hits.length === 0) {
+          toast.error('Image not found');
+          return;
+        }
+        setImageList([...data.hits]);
+        setPage(2);
+        setTotalHits(data.totalHits);
+      })
+      .finally(() => setLoader(false));
+  }, [search]);
 
-  loadMore = () => {
-    requestImage(this.props.search, this.state.page)
+  const loadMore = () => {
+    requestImage(search, page)
       .then(response => {
         const { hits } = response.data;
-        this.setState(prevState => ({
-          imageList: [...prevState.imageList, ...hits],
-          page: prevState.page + 1,
-        }));
+        setImageList(prev => [...prev, ...hits]);
+        setPage(page + 1);
       })
       .catch(error => {
-        this.setState(console.log(error));
+        toast.error('Ooops...something went wrong.');
       });
   };
 
-  render() {
-    const { imageList, totalHits, page, loader } = this.state;
-    if (!imageList.length) {
-      return (
-        <p
-          style={{
-            fontSize: '24px',
-            margin: '150px auto',
-          }}
-        >
-          {'Search an image'}
-        </p>
-      );
-    }
+  if (!imageList.length) {
     return (
-      <>
-        <ul className={styles.gallery}>
-          {loader && <Loader />}
-          {imageList.map(({ id, webformatURL, largeImageURL }) => {
-            return (
-              <ImageGalleryItem
-                key={id}
-                imagePreview={webformatURL}
-                originalImage={largeImageURL}
-                handlerOpenModal={this.props.handlerOpenModal}
-              />
-            );
-          })}
-        </ul>
-        {totalHits >= 12 * page && <Button onClick={this.loadMore} />}
-      </>
+      <p
+        style={{
+          fontSize: '24px',
+          margin: '150px auto',
+        }}
+      >
+        {'Search an image'}
+      </p>
     );
   }
-}
+  return (
+    <>
+      <ul className={styles.gallery}>
+        {loader && <Loader />}
+        {imageList.map(({ id, webformatURL, largeImageURL }) => {
+          return (
+            <ImageGalleryItem
+              key={id}
+              imagePreview={webformatURL}
+              originalImage={largeImageURL}
+              handlerOpenModal={handlerOpenModal}
+            />
+          );
+        })}
+      </ul>
+      {totalHits >= 12 * page && <Button onClick={loadMore} />}
+    </>
+  );
+};
+
+ImageGallery.propTypes = {
+  handlerOpenModal: PropTypes.func.isRequired,
+  search: PropTypes.string.isRequired,
+};
